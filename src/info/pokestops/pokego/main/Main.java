@@ -4,7 +4,6 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -13,68 +12,112 @@ import java.util.List;
 
 import okhttp3.OkHttpClient;
 import POGOProtos.Map.Fort.FortDataOuterClass.FortData;
-import POGOProtos.Networking.Envelopes.RequestEnvelopeOuterClass.RequestEnvelope.AuthInfo;
 
 import com.pokegoapi.api.PokemonGo;
 import com.pokegoapi.api.map.Map;
 import com.pokegoapi.api.map.MapObjects;
 import com.pokegoapi.api.map.fort.Pokestop;
-import com.pokegoapi.auth.PtcLogin;
+import com.pokegoapi.auth.PtcCredentialProvider;
 import com.pokegoapi.exceptions.LoginFailedException;
 import com.pokegoapi.exceptions.RemoteServerException;
 
 public class Main {
 	
+	
 	private static int alt = 0;
 	private static int width = 9;
-	private static int maxErrors = 10;
 	private static int maxNoLocs = 10;
 	private static int refreshLocs = 3;
-	private static double coordConst = 0.017;
+	private static double coordConst = 0.021;
 	
-	private static String dir = "C:/Users/User/Desktop/Locations/";
+	private static String city = "Default";
+	private static String dir = "C:/Users/***/Desktop/Locations/";
+	
+	private static PokemonGo go;
+	public static String refresh_token;
+	private static OkHttpClient httpClient;
 	
 	private static List<Pokestop> stops = new ArrayList<Pokestop>();
 	private static List<FortData> gyms = new ArrayList<FortData>();
+	private static List<String> log = new ArrayList<String>();
 	
 	public static final void main(String[] args) throws LoginFailedException, RemoteServerException, InterruptedException{
-		scan(new Bounds("42.46424606945876,-82.8812026977539", "42.23995623127169,-83.28907012939453"), "Detroit", PopulationType.URBAN);
+		log("Logging into account...");
+		httpClient = new OkHttpClient();
+		try{
+			go = new PokemonGo(new PtcCredentialProvider(httpClient, "***", "***"), httpClient);
+		}catch (LoginFailedException ex){
+			catchException(ex);
+		}catch (RemoteServerException ex) {
+			catchException(ex);
+		}
+		
+		List<Scan> scans = new ArrayList<Scan>();
+		scans.add(new Scan(new Bounds("52.52697915988631,13.195610046386719", "52.50613909894948,13.45301628112793"), "Berlin", PopulationType.URBAN));
+		scans.add(new Scan(new Bounds("40.44955971899028,-3.6002540588378906", "40.47555014671345,-3.7789535522460938"), "Madrid", PopulationType.URBAN));
+		scans.add(new Scan(new Bounds("44.41416430998939,26.013050079345703", "44.376140479200124,26.103858947753906"), "Bucharest", PopulationType.URBAN));
+		scans.add(new Scan(new Bounds("48.21094727794909,16.292381286621094", "48.22856083588024,16.37460708618164"), "Vienna", PopulationType.URBAN));
+		scans.add(new Scan(new Bounds("53.55632008870665,9.955329895019531", "53.50908051674147,10.036182403564453"), "Hamburg", PopulationType.URBAN));
+		scans.add(new Scan(new Bounds("47.50850487150151,18.96514892578125", "47.48345284065516,19.238948822021484"), "Budapest", PopulationType.URBAN));
+		scans.add(new Scan(new Bounds("52.489679436549324,-1.8962574005126953", "52.465213701916504,-1.8106842041015625"), "Birmingham UK", PopulationType.URBAN));
+		scans.add(new Scan(new Bounds("50.92346159685735,6.986403465270996", "50.90151722768345,6.901988983154297"), "Cologne", PopulationType.URBAN));
+		scans.add(new Scan(new Bounds("40.87886710569574,14.22429084777832", "40.85692857386187,14.318962097167969"), "Naples", PopulationType.URBAN));
+		
+		scans.add(new Scan(new Bounds("44.99879594361408,7.5208282470703125", "45.110361752910514,7.761325836181641"), "Turin", PopulationType.URBAN));
+		scans.add(new Scan(new Bounds("43.36612409315011,5.3009033203125", "43.23394781150972,5.4512786865234375"), "Marseille", PopulationType.URBAN));
+		scans.add(new Scan(new Bounds("52.4275475424737,4.77630615234375", "52.28811257899827,5.004615783691406"), "Amsterdam", PopulationType.URBAN));
+		scans.add(new Scan(new Bounds("45.848651708793966,15.852584838867188", "45.75243291804482,16.09222412109375"), "Zagreb", PopulationType.URBAN));
+		scans.add(new Scan(new Bounds("39.538469286383034,-0.48168182373046875", "39.38765194764911,-0.3179168701171875"), "Valencia", PopulationType.URBAN));
+		scans.add(new Scan(new Bounds("35.49981018711523,139.57717895507812", "35.8217105820067,139.99740600585938"), "Tokyo", PopulationType.URBAN));
+		scans.add(new Scan(new Bounds("40.637664715596856,-74.08561706542969", "40.87821814104651,-73.78520965576172"), "New York", PopulationType.URBAN));
+		scanList(scans);
 	}
 	
-	public static final void scan(Bounds bounds, String city, PopulationType type) throws InterruptedException, LoginFailedException{
-		System.out.println("Scanning " + city);
+	public static final void scanList(List<Scan> scans){
+		int count = 0;
+		for(Scan scan : scans){
+			scan(scan);
+			count++;
+			if(count < scans.size()){
+				log("Scanning next city... sleeping 60 seconds.");
+				Main.delay(60000);
+			}
+		}
+	}
+	
+	public static final void scan(Scan scan){
+		Bounds bounds = scan.getBounds();
+		String city = scan.getCity();
+		PopulationType type = scan.getPopulationType();
 		
+		log("Scanning " + city);
+		
+		Main.city = city;
 		Main.dir = "C:/Users/Joey/Desktop/Locations/" + city + "/";
 		maxNoLocs = type.getMaxNoLocations();
 		refreshLocs = type.getRefreshLocations();
-		
-		System.out.println("Logging into account...");
-		OkHttpClient httpClient = new OkHttpClient();
-		AuthInfo auth = new PtcLogin(httpClient).login("user", "pass");
 		
 		double minLat = bounds.getMinLat();
 		double maxLat = bounds.getMaxLat();
 		double minLng = bounds.getMinLng();
 		double maxLng = bounds.getMaxLng();
 		
-		int errors = 0;
 		int nolocs = 0;
 		
-		int scan = 1;
+		int count = 1;
 		int total = calculateLoops(minLat, maxLat, minLng, maxLng);
 		for(double x = minLat; x <= maxLat; x += coordConst){
 			for(double z = minLng; z <= maxLng; z += coordConst){
 				int locs = 0;
 				try{
-					PokemonGo go = new PokemonGo(auth,httpClient);
 					go.setLocation(x, z, alt);
 					
-					System.out.println("Getting nearby locations...");
+					log("Getting nearby locations...");
 					
 					Map map = go.getMap();
 					map.setUseCache(false);
 					
-					System.out.println("CHECKING (" + scan + "/" + total +"): " + go.getLatitude() + ", " + go.getLongitude());
+					log("CHECKING (" + count + "/" + total +"): " + go.getLatitude() + ", " + go.getLongitude());
 					
 					MapObjects objs = map.getMapObjects(width);
 					for(Iterator<Pokestop> iterator = objs.getPokestops().iterator(); iterator.hasNext();){
@@ -89,17 +132,15 @@ public class Main {
 						locs++;
 					}
 					
-					scan++;
-					if((scan % 80) == 0){
+					count++;
+					if((count % 25) == 0){
 						dumpSearch();
-						Thread.sleep(3000);
-					}else if((scan % 150) == 0){
-						System.out.println("Sleeping for 3 seconds...");
-						Thread.sleep(3000);
-						System.out.println("\nCreate new HTTP Client");
-						httpClient = new OkHttpClient();
+						Main.delay(3000);
+					}else if((count % 150) == 0){
+						log("Refreshing. Sleeping for 5 seconds...");
+						Main.delay(5000);
 					}else{
-						Thread.sleep(900);
+						Main.delay(900);
 					}
 					
 					if(locs == 0){
@@ -108,62 +149,82 @@ public class Main {
 						nolocs = 0;
 					}
 					if(nolocs < maxNoLocs && nolocs > 0 && (nolocs % refreshLocs) == 0){
-						System.out.println("Sleeping for 15 seconds...");
-						Thread.sleep(15000);
-						System.out.println("\nCreate new HTTP Client");
-						httpClient = new OkHttpClient();
+						log("Sleeping for 15 seconds...");
+						Main.delay(15000);
 					}else if(nolocs > maxNoLocs){
-						System.out.println("Sleeping for 60 seconds...");
+						log("Sleeping for 120 seconds...");
 						nolocs = 0;
-						Thread.sleep(60000);
-						System.out.println("\nCreate new HTTP Client");
-						httpClient = new OkHttpClient();
+						Main.delay(120000);
+						createNewClient();
 					}
 				}catch (Exception ex){
-					ex.printStackTrace();
-					if(errors < maxErrors){
-						errors++;
-						System.out.println("\nError discovered, retry in 10 seconds.");
-						Thread.sleep(10000);
-						System.out.println("\nCreate new HTTP Client");
-						httpClient = new OkHttpClient();
-					}else{
-						dumpSearch();
-						System.out.println("\nMax errors reached, end task.");
-						break;
-					}
+					catchException(ex);
 				}
 			}
 		}
 		dumpSearch();
 		stops.clear();
 		gyms.clear();
-		System.out.println("Scanning next city... wait 120 seconds");
-		Thread.sleep(120000);
+	}
+	
+	public static final void delay(long time){
+		try{
+			Thread.sleep(time);
+		}catch (InterruptedException e){
+			e.printStackTrace();
+		}
+	}
+	
+	public static final void catchException(Exception ex){
+		ex.printStackTrace();
+		dumpSearch();
+		log("\nError discovered, retry in 30 seconds.");
+		Main.delay(30000);
+		createNewClient();
+	}
+	
+	public static final void createNewClient(){
+		try{
+			log("\nCreate new HTTP Client");
+			httpClient = new OkHttpClient();
+			go = new PokemonGo(new PtcCredentialProvider(httpClient, "***", "***"), httpClient);
+		}catch (Exception ex){
+			catchException(ex);
+		}
 	}
 	
 	public static final void dumpSearch(){
-		System.out.println("\n\nFound " + (stops.size() + gyms.size()) + " locations.\n");
-		
-		List<String> stopCoords = new ArrayList<String>();
-		List<String> gymCoords = new ArrayList<String>();
-		
-		for(Pokestop s : stops){
-			stopCoords.add(s.getLatitude() + ", " + s.getLongitude());
+		try{
+			log("\n\nFound " + (stops.size() + gyms.size()) + " locations (" + stops.size() + " stops, " + gyms.size() + " gyms)\n");
+			
+			List<String> stopCoords = new ArrayList<String>();
+			List<String> gymCoords = new ArrayList<String>();
+			
+			for(Pokestop s : stops){
+				String id = s.getId();
+				
+				stopCoords.add(s.getLatitude() + "->" + s.getLongitude() + "->" + id);
+			}
+			for(FortData g : gyms){
+				gymCoords.add(g.getLatitude() + ", " + g.getLongitude());
+			}
+			
+			log("Locations dumped to " + dir);
+			int existingStops = appendToFile(LocationType.POKESTOP, stopCoords);
+			int existingGyms = appendToFile(LocationType.GYM, gymCoords);
+			log((existingStops + existingGyms) + " coordinates already existed and were not added (" + existingStops + " stops, " + existingGyms + " gyms)\n");
+			
+			log("Dumping log\n");
+			dumpLog();
+		}catch (Exception ex){
+			catchException(ex);
 		}
-		for(FortData g : gyms){
-			gymCoords.add(g.getLatitude() + ", " + g.getLongitude());
-		}
-		
-		System.out.println("Pokestops dumped to Desktop/pokestops.txt");
-		System.out.println("Gyms dumped to Desktop/gyms.txt");
-		appendToFile(LocationType.POKESTOP, stopCoords);
-		appendToFile(LocationType.GYM, gymCoords);
 	}
 	
-	public static final void appendToFile(LocationType type, List<String> coords){
+	public static final int appendToFile(LocationType type, List<String> coords){
+		int exists = 0;
 		try{
-			String filename = type.toString().toLowerCase() + "s.txt";
+			String filename = city + "-" + type.toString().toLowerCase() + "s.txt";
 			
 			File cityDir = new File(dir);
 			if(!cityDir.exists()){
@@ -183,7 +244,6 @@ public class Main {
 			FileWriter fw = new FileWriter(file.getAbsoluteFile(), true);
 			BufferedWriter bw = new BufferedWriter(fw);
 			
-			int exists = 0;
 			for(String c : coords){
 				String line = c + "|";
 				if(!lines.contains(line)){
@@ -195,21 +255,64 @@ public class Main {
 			}
 			
 			bw.close();
+		}catch (IOException ex){
+			ex.printStackTrace();
+		}
+		return exists;
+	}
+	
+	public static final void log(String message){
+		String fullmsg = "[" + getTime() + "] " +  message;
+		System.out.println(fullmsg);
+		log.add(fullmsg);
+	}
+	
+	public static final void dumpLog(){
+		try{
+			String filename = city + " log.txt";
 			
-			System.out.println(exists + " coordinates already existed and were not added.");
+			File cityDir = new File(dir);
+			if(!cityDir.exists()){
+				cityDir.mkdir();
+			}
+			
+			File file = new File(dir + filename);
+
+			if(file.exists()){
+				file.delete();
+			}
+			file.createNewFile();
+
+			FileWriter fw = new FileWriter(file.getAbsoluteFile(), true);
+			BufferedWriter bw = new BufferedWriter(fw);
+			
+			for(String s : log){
+				bw.write(s);
+				bw.newLine();
+			}
+			
+			bw.close();
+			log.clear();
 		}catch (IOException ex){
 			ex.printStackTrace();
 		}
 	}
 	
-	public static void log(String message) {
-		try{
-			PrintWriter out = new PrintWriter(new FileWriter(dir + "log.txt", true), true);
-			out.write(message);
-			out.close();
-		}catch (IOException ex){
-			
+	public static final String getTime(){
+		long millis = System.currentTimeMillis();
+		long second = (millis / 1000) % 60;
+		long minute = (millis / (1000 * 60)) % 60;
+		long hour = (millis / (1000 * 60 * 60)) % 24;
+		
+		hour -= 4;
+		if(hour < 0){
+			hour = 12 + hour;
 		}
+		if(hour > 12){
+			hour -= 12;
+		}
+
+		return String.format("%02d:%02d:%02d", hour, minute, second);
 	}
 	
 	public static final int calculateLoops(double minLat, double maxLat, double minLng, double maxLng){
@@ -230,7 +333,7 @@ public class Main {
 			}
 		}
 		if(add){
-			System.out.println("Found stop at " + s.getLatitude() + ", " + s.getLongitude());
+			log("Found stop at " + s.getLatitude() + ", " + s.getLongitude());
 			stops.add(s);
 		}
 	}
@@ -243,7 +346,7 @@ public class Main {
 			}
 		}
 		if(add){
-			System.out.println("Found gym at " + g.getLatitude() + ", " + g.getLongitude());
+			log("Found gym at " + g.getLatitude() + ", " + g.getLongitude());
 			gyms.add(g);
 		}
 	}

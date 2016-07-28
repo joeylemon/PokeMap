@@ -3,8 +3,8 @@ package info.pokestops.pokego.main;
 public enum PopulationType {
 	
 	URBAN(3, 1),
-	SUBURBAN(15, 9),
-	RURAL(45, 18);
+	SUBURBAN(12, 6),
+	RURAL(20, 10);
 	
 	private int maxNoLocs;
 	private int refreshLocs;
